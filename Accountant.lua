@@ -72,6 +72,7 @@ if not ACCLOC_WEEKSTART    then ACCLOC_WEEKSTART    = "Inicio de la semana" end
 if not ACCLOC_GOLD         then ACCLOC_GOLD         = "g " end
 if not ACCLOC_SILVER       then ACCLOC_SILVER       = "s " end
 if not ACCLOC_CENT         then ACCLOC_CENT         = "c" end
+if not ACCLOC_RESET_CONF   then ACCLOC_RESET_CONF   = "¿Seguro que quieres restablecer la" end
 
 -- Fallbacks para etiquetas de sección (Origen)
 if not ACCLOC_LOOT   then ACCLOC_LOOT   = "Botín" end
@@ -502,16 +503,30 @@ function Accountant_OnShow()
 	-- Check to see if the day has rolled over
 	cdate = date();
 	cdate = string.sub(cdate,0,8);
-	if Accountant_SaveData[Accountant_Server][Accountant_Player]["options"]["date"] ~= cdate then
+	local savedDate = Accountant_SaveData[Accountant_Server][Accountant_Player]["options"]["date"];
+	
+	if Accountant_Verbose then 
+		ACC_Print("OnShow - Fecha actual: " .. cdate .. ", Fecha guardada: " .. (savedDate or "nil")); 
+	end
+	
+	if savedDate ~= cdate then
 		-- Its a new day! clear out the day tab
+		if Accountant_Verbose then 
+			ACC_Print("Nuevo día detectado (" .. (savedDate or "nil") .. " -> " .. cdate .. "). Limpiando estadísticas del día anterior."); 
+		end
 		for mode,value in pairs(Accountant_Data) do
+			if Accountant_Verbose then
+				ACC_Print("Limpiando día para " .. mode .. " - Tenía In:" .. Accountant_Data[mode]["Day"].In .. " Out:" .. Accountant_Data[mode]["Day"].Out);
+			end
 			Accountant_Data[mode]["Day"].In = 0;
 			Accountant_SaveData[Accountant_Server][Accountant_Player]["data"][mode]["Day"].In = 0;
 			Accountant_Data[mode]["Day"].Out = 0;
 			Accountant_SaveData[Accountant_Server][Accountant_Player]["data"][mode]["Day"].Out = 0;
 		end
+		-- Actualizar la fecha guardada DESPUÉS del reseteo
+		Accountant_SaveData[Accountant_Server][Accountant_Player]["options"]["date"] = cdate;
 	end
-	Accountant_SaveData[Accountant_Server][Accountant_Player]["options"]["date"] = cdate;
+	
 	-- Check to see if the week has rolled over
 	if Accountant_SaveData[Accountant_Server][Accountant_Player]["options"]["dateweek"] ~= Accountant_WeekStart() then
 		-- Its a new week! clear out the week tab
@@ -678,17 +693,27 @@ function Accountant_UpdateLog()
 	
 	if diff >0 then
 		for key,logmode in pairs(Accountant_LogModes) do
+			local oldValue = Accountant_Data[mode][logmode].In;
 			Accountant_Data[mode][logmode].In = Accountant_Data[mode][logmode].In + diff
 			Accountant_SaveData[Accountant_Server][Accountant_Player]["data"][mode][logmode].In = Accountant_Data[mode][logmode].In;
 		end
-		if Accountant_Verbose then ACC_Print("Gained "..Accountant_NiceCash(diff).." from "..mode); end
+		if Accountant_Verbose then 
+			ACC_Print("Ganancia registrada: " .. Accountant_NiceCash(diff) .. " de " .. mode);
+			-- Debug específico para casa de subastas Y correo
+			if mode == "AH" or mode == "MAIL" then
+				ACC_Print("DEBUG " .. mode .. " - Session: " .. Accountant_Data[mode]["Session"].In .. 
+				         " Day: " .. Accountant_Data[mode]["Day"].In .. 
+				         " Week: " .. Accountant_Data[mode]["Week"].In .. 
+				         " Total: " .. Accountant_Data[mode]["Total"].In);
+			end
+		end
 	elseif diff < 0 then
 		diff = diff * -1;
 		for key,logmode in pairs(Accountant_LogModes) do
 			Accountant_Data[mode][logmode].Out = Accountant_Data[mode][logmode].Out + diff
 			Accountant_SaveData[Accountant_Server][Accountant_Player]["data"][mode][logmode].Out = Accountant_Data[mode][logmode].Out;
 		end
-		if Accountant_Verbose then ACC_Print("Lost "..Accountant_NiceCash(diff).." from "..mode); end
+		if Accountant_Verbose then ACC_Print("Pérdida registrada: " .. Accountant_NiceCash(diff) .. " de " .. mode); end
 	end
 
 	-- special case mode resets
